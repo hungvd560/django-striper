@@ -1,0 +1,19 @@
+version: '3'
+
+services:
+  striper-db:
+    image: mysql:5.7
+    restart: always
+    environment:
+      MYSQL_DATABASE: striper_db
+      MYSQL_USER: root
+      MYSQL_PASSWORD: root
+      MYSQL_ROOT_PASSWORD: root
+    command:
+      - --sql-mode=NO_ENGINE_SUBSTITUTION
+    ports:
+      - 3306:3306
+    expose:
+      - 3306
+
+volumes:
