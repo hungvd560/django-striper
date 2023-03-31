@@ -9,5 +9,5 @@ from payment.serializers import CreateCustomerSerializer
 
 
 class CustomerCreate(generics.CreateAPIView):
-    queryset = Customer.object.all()
+    # queryset = Customer.object.all()
     serializer_class = CreateCustomerSerializer
