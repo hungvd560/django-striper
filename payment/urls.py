@@ -1,6 +1,7 @@
 from django.urls import path
-from payment.views import CustomerCreate
+from payment.views import CustomerAPIView, OrderAPIView
 
 urlpatterns = [
-    path('payment/', CustomerCreate.as_view())
+    path('customer', CustomerAPIView.as_view()),
+    path('orders/create', OrderAPIView.as_view(), name='order_create')
 ]

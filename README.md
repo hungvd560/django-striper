@@ -4,4 +4,4 @@
 
 # migrate db
 `python manage.py makemigrations`  
-`python manage.py migration`   
+`python manage.py migrate`   

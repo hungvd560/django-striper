@@ -14,18 +14,15 @@ class Customer(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
 
 
-class OrderDetail(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4())
-    # order_id = models.CharField(max_length=225, blank=True)
-    product = models.ForeignKey(Product, on_delete=models.CASCADE)
-    quantity = models.IntegerField()
-
-
 class Order(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4())
-    order_id = models.CharField(max_length=255, blank=True)
-    order_detail = models.ForeignKey(OrderDetail, on_delete=models.CASCADE)
+    order_number = models.CharField(max_length=255, blank=True)
     payment_id = models.CharField(max_length=255, blank=True)
     payment_status = models.CharField(max_length=50, blank=True)
+
+
+class OrderDetail(models.Model):
+    order = models.ForeignKey(Order, related_name='order_details', on_delete=models.CASCADE, default=None)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    quantity = models.IntegerField()
 
 

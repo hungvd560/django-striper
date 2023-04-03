@@ -12,7 +12,9 @@ class User(AbstractUser):
 
 class Product(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4())
-    name = models.TextField(max_length=500, blank=True)
+    name = models.CharField(max_length=500, blank=True)
     description = models.CharField(max_length=500, blank=True)
     currency = models.CharField(max_length=30, blank=True)
     unit_amount = models.BigIntegerField(null=False, default=0)
+    product_id = models.CharField(max_length=125, blank=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, blank=True, null=True)
