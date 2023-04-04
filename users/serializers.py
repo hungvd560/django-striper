@@ -47,3 +47,7 @@ class ProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = ["id", "name", "description", "currency", "unit_amount", "product_id", "user"]
+
+    # def update(self, instance, validated_data):
+    #     # Cập nhật trường title của đối tượng Book
+    #     instance.product_id = validated_data.get('product_id', instance.product_id)

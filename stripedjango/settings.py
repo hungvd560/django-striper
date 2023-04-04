@@ -22,6 +22,7 @@ BASE_DIR = Path(__file__).resolve(strict=True).parent.parent
 # See https://docs.djangoproject.com/en/3.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = 'f#%1%ns6z$9&i-lxzs&59c@&uhj#$=#4hxasaw6vzfss1gti_1'
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -34,7 +35,6 @@ ALLOWED_HOSTS = []
 INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_jwt',
-    'rest_framework_swagger',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -170,3 +170,11 @@ STATIC_URL = '/static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+
+#stripe
+STRIPE_SECRET_KEY = 'sk_test_51MqtzNFLQQzXmfh239tYf2l1fO1sYv06AXkvJXYf3iJOAy7OR85CZ4sQkl4OjwUZEecsbPB0FrjdIT6mrIBaPj5W00fGbiZ4mc'
+STRIPE_WEBHOOK_SECRET = 'whsec_2342e90ceb0511daecf86c93b1519f9ded70ddc6bd87807b37ba7864ebc84540'
+
+#front-end URL's
+CHECKOUT_SUCCESS_URL = 'http://localhost:3000/checkout/success/'
+CHECKOUT_FAILED_URL = 'http://localhost:3000/checkout/failed/'

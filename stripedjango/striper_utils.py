@@ -54,20 +54,47 @@ def create_new_product(**kwargs):
     return product
 
 
-def create_new_charge(order, customer):
+def create_new_charge(amount, order_id, customer_id):
+    """
+    customer thanh toán order
+    :param amount:
+    :param order_id:
+    :param customer_id:
+    :return:
+    """
+    charge = stripe.Charge.create(
+        amount=amount, # đơn vị tính là cent
+        currency="usd",
+        customer=customer_id,
+        description="Payment for Order #{}".format(order_id),
+    )
+
+    return charge
+
+
+def create_order(order, user_email):
     """
     customer thanh toán order
     :param order:
     :param customer:
     :return:
     """
-    charge = stripe.Charge.create(
-        amount=order.amount,
-        currency=order.currency,
-        customer=customer.id,
-        description='Example charge',
+    # get product info
+    order_detail = order.order_details.all()
+    line_items = []
+    total_amount = 0
+    for item in order_detail:
+        product = stripe.Product.retrieve(item.product.product_id)
+        price = stripe.Price.retrieve(product.price)
+        line_items.append({
+            'price': product.price,
+            'quantity': item.quantity,
+        })
+        total_amount += (price.unit_amount*item.quantity)
+    order = stripe.Order.create(
+        currency='usd',
+        email='customer@example.com',
+        items=line_items,
     )
-
-    return charge
-
+    return order.id, order.currency, total_amount
 

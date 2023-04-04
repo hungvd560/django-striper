@@ -1,6 +1,6 @@
 [client]
-database=striper-test
+database=stripe-test
 user=root
-password=root
+password=1234567aA@
 host=127.0.0.1
-port=3308
+port=3306

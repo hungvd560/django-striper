@@ -9,7 +9,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from payment.models import Customer, Order, OrderDetail
 from payment.serializers import CustomerSerializer, OrderSerializer, OrderDetailSerializer
 
-from stripedjango.striper_utils import create_new_customer, create_new_token
+from stripedjango.striper_utils import create_new_customer, create_new_token, create_order, create_new_charge
 
 
 class CustomerAPIView(APIView):
@@ -59,17 +59,6 @@ class CustomerAPIView(APIView):
 class OrderAPIView(APIView):
     permission_classes = (IsAuthenticated, )
 
-    # def get(self, request, *args, **kwargs):
-    #     """
-    #     :param request:
-    #     :param args:
-    #     :param kwargs:
-    #     :return:
-    #     """
-    #     products = Customer.objects.filter(user=request.user.id)
-    #     serializer = CustomerSerializer(products, many=True)
-    #     return Response(serializer.data, status=status.HTTP_200_OK)
-
     def post(self, request, *args, **kwargs):
         """
         :param request:
@@ -84,4 +73,25 @@ class OrderAPIView(APIView):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PaymentAPIView(APIView):
+    permission_classes = (IsAuthenticated, )
+
+    def post(self, request, pk):
+        """
+        :param request:
+        :param args:
+        :param kwargs:
+        :return:
+        """
+
+        order = Order.objects.get(pk=pk)
+
+        # create order to stripe
+        order_id = create_order(order, request.user.email)
+
+        # change order
+        change = create_new_charge(amount, currency, customer_id)
+
 

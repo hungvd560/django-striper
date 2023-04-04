@@ -60,17 +60,18 @@ class ListProductAPIView(APIView):
             'unit_amount': request.data.get('unit_amount'),
             'user': request.user.id
         }
-        serializer = ProductSerializer(data=data)
-        if serializer.is_valid():
-            # create Product to stripe
+
+        resp = create_new_product(**data)
+        if resp:
+            data.update({"product_id": resp.id})
             # TODO function check Zero-decimal currencies
-            if data.get('currency') == 'USD':
-                data.update({'unit_amount': data.get('unit_amount')*100})
-                pass
-            resp = create_new_product(**data)
-            if resp:
-                serializer.product_id = resp.id
+            if request.data.get('currency') == 'usd':
+                data.update({'unit_amount': request.data.get('unit_amount') / 100})
+
+            serializer = ProductSerializer(data=data)
+            if serializer.is_valid():
                 serializer.save()
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(resp, status=status.HTTP_400_BAD_REQUEST)
