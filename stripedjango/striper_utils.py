@@ -1,9 +1,23 @@
+from django.http import HttpResponseServerError
+from stripe.error import StripeError
 import stripe
 from django.conf import settings
+from users.models import ProductType, ProductInterval
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
+def stripe_error_handler(func):
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except StripeError as e:
+            print('Stripe error:', str(e))
+            return HttpResponseServerError()
+    return wrapper
+
+
+@stripe_error_handler
 def create_new_token(**kwargs):
     """
     :param kwargs: card info
@@ -21,6 +35,7 @@ def create_new_token(**kwargs):
     return token
 
 
+@stripe_error_handler
 def create_new_customer(email, payment_token):
     """
     Tạo customer và thông tin thanh toán
@@ -35,6 +50,7 @@ def create_new_customer(email, payment_token):
     return customer
 
 
+@stripe_error_handler
 def create_new_product(**kwargs):
     """
     # tạo sản phẩm và giá
@@ -45,33 +61,46 @@ def create_new_product(**kwargs):
         description=kwargs.get('description'),
     )
 
-    price = stripe.Price.create(
-        unit_amount=kwargs.get('unit_amount'),
-        currency=kwargs.get('currency'),
-        product=product["id"],
-    )
+    if kwargs.get('type') and kwargs.get('type') == ProductType.DIRECT:
+
+        price = stripe.Price.create(
+            unit_amount=kwargs.get('unit_amount'),
+            currency=kwargs.get('currency'),
+            product=product["id"],
+        )
+    else:
+        plan = stripe.Plan.create(
+            amount=kwargs.get('unit_amount'),  # Số tiền thanh toán (tính bằng cents)
+            currency=kwargs.get('currency'),
+            interval=kwargs.get('interval', ProductInterval.MONTH),  # Chu kỳ thanh toán hàng tháng
+            product=product["id"],
+        )
 
     return product
 
 
-def create_new_charge(amount, order_id, customer_id):
+@stripe_error_handler
+def create_new_payment_intent(amount, currency, order_id, customer_id):
     """
     customer thanh toán order
     :param amount:
+    :param currency:
     :param order_id:
     :param customer_id:
     :return:
     """
-    charge = stripe.Charge.create(
-        amount=amount, # đơn vị tính là cent
-        currency="usd",
+    intent = stripe.PaymentIntent.create(
+        amount=amount,
+        currency=currency,
         customer=customer_id,
-        description="Payment for Order #{}".format(order_id),
+        metadata={"order_id": order_id},
     )
+    # Xác nhận thanh toán
+    intent.confirm()
+    return intent.status
 
-    return charge
 
-
+@stripe_error_handler
 def create_order(order, user_email):
     """
     customer thanh toán order
@@ -93,7 +122,7 @@ def create_order(order, user_email):
         total_amount += (price.unit_amount*item.quantity)
     order = stripe.Order.create(
         currency='usd',
-        email='customer@example.com',
+        email=user_email,
         items=line_items,
     )
     return order.id, order.currency, total_amount

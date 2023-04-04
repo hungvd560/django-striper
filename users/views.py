@@ -41,7 +41,7 @@ class ListProductAPIView(APIView):
         :param kwargs:
         :return:
         """
-        products = Product.objects.filter(user=request.user.id)
+        products = Product.objects.all()
         serializer = ProductSerializer(products, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -58,6 +58,8 @@ class ListProductAPIView(APIView):
             'description': request.data.get('description'),
             'currency': request.data.get('currency'),
             'unit_amount': request.data.get('unit_amount'),
+            'type': request.data.get('type', None),
+            'interval': request.data.get('interval', None),
             'user': request.user.id
         }
 

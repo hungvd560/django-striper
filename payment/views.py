@@ -9,7 +9,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from payment.models import Customer, Order, OrderDetail
 from payment.serializers import CustomerSerializer, OrderSerializer, OrderDetailSerializer
 
-from stripedjango.striper_utils import create_new_customer, create_new_token, create_order, create_new_charge
+from stripedjango.striper_utils import create_new_customer, create_new_token, create_order, create_new_payment_intent
 
 
 class CustomerAPIView(APIView):
@@ -89,9 +89,12 @@ class PaymentAPIView(APIView):
         order = Order.objects.get(pk=pk)
 
         # create order to stripe
-        order_id = create_order(order, request.user.email)
+        order_id, currency, total_amount = create_order(order, request.user.email)
+        customer = Customer.object.filter(user__id=request.user.id).first()
 
         # change order
-        change = create_new_charge(amount, currency, customer_id)
-
+        payment_status = create_new_payment_intent(total_amount, currency, order_id, customer.customer_id)
+        order.payment_status = payment_status
+        order.save()
+        return Response(status=status.HTTP_200_OK)
 
