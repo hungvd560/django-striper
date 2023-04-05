@@ -10,13 +10,12 @@ from users.models import Product, User
 
 class Customer(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4())
-    customer_id = models.CharField(max_length=225, blank=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
 
 
 class Order(models.Model):
     order_number = models.CharField(max_length=255, blank=True)
-    payment_id = models.CharField(max_length=255, blank=True)
+    session_id = models.CharField(max_length=255, blank=True)
     payment_status = models.CharField(max_length=50, blank=True)
 
 

@@ -1,17 +1,25 @@
 import logging
 import os
 from uuid import uuid4
+import json
+
+from django.views.decorators.csrf import csrf_exempt
+from django.conf import settings
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
-from .models import Product
-from payment.models import Customer, Order, OrderDetail
-from payment.serializers import CustomerSerializer, OrderSerializer, OrderDetailSerializer, SubscriptionSerializer
+from users.models import User
+from users.serializers import UserSerializer
+from .models import Customer, Order, OrderDetail, Product
+from .serializers import CustomerSerializer, OrderSerializer, OrderDetailSerializer, SubscriptionSerializer
 
-from stripedjango.striper_utils import create_new_customer, create_new_token, create_order, \
-    create_new_payment_intent, create_subscription
+from stripedjango.striper_utils import create_new_customer, create_checkout_session, \
+    create_new_payment_intent, create_subscription, check_customer_exist, add_payment_method
+import stripe
+
+stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
 class CustomerAPIView(APIView):
@@ -24,8 +32,8 @@ class CustomerAPIView(APIView):
         :param kwargs:
         :return:
         """
-        products = Customer.objects.filter(user=request.user.id)
-        serializer = CustomerSerializer(products, many=True)
+        user = User.objects.get(pk=request.user.id)
+        serializer = UserSerializer(user, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def post(self, request, *args, **kwargs):
@@ -36,26 +44,23 @@ class CustomerAPIView(APIView):
         :return:
         """
 
-        # create card:
-        card = create_new_token(**request.data)
-        if not card:
-            return Response('add card error', status=status.HTTP_400_BAD_REQUEST)
+        user = User.objects.get(pk=request.user.id)
+        # flag create customer_id
+        flag_exist = False
+        customer_id = user.stripe_customer_id
 
-        # add card to user
-        customer = create_new_customer(email=request.user.email, payment_token=card.id)
-        if not customer:
-            return Response('add customer error', status=status.HTTP_400_BAD_REQUEST)
+        if customer_id:
+            flag_exist = check_customer_exist(customer_id)
 
-        data = {
-                'id': str(uuid4()),
-                'customer_id': customer.id,
-                'user': request.user.id
-            }
-        serializer = CustomerSerializer(data=data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if not flag_exist:
+            customer = create_new_customer(user.email)
+            customer_id = customer.id
+            user.customer_id = customer_id
+            user.save()
+
+        # add card to customer
+        card = add_payment_method(request.data, customer_id)
+        return Response(user.data, status=status.HTTP_201_CREATED)
 
 
 class OrderAPIView(APIView):
@@ -89,15 +94,11 @@ class PaymentAPIView(APIView):
 
         order = Order.objects.get(pk=pk)
 
-        # create order to stripe
-        order_id, currency, total_amount = create_order(order, request.user.email)
-        customer = Customer.object.filter(user__id=request.user.id).first()
-
-        # change order
-        payment_status = create_new_payment_intent(total_amount, currency, order_id, customer.customer_id)
-        order.payment_status = payment_status
+        # create order and payment with checkout session
+        session_id = create_checkout_session(order, request.user.stripe_customer_id)
+        order.session_id = session_id
         order.save()
-        return Response(status=status.HTTP_200_OK)
+        return Response(data={'session_id': session_id}, status=status.HTTP_200_OK)
 
 
 class SubscriptionAPIView(APIView):
@@ -128,3 +129,45 @@ class SubscriptionAPIView(APIView):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
+class StripeWebhook(APIView):
+    @csrf_exempt
+    def post(self, request, *args, **kwargs):
+
+        stripe.api_key = settings.STRIPE_SECRET_KEY
+        endpoint_secret = settings.STRIPE_ENDPOINT_SECRET
+        payload = request.body
+        sig_header = request.META['HTTP_STRIPE_SIGNATURE']
+
+        try:
+            event = stripe.Webhook.construct_event(
+                payload, sig_header, endpoint_secret
+            )
+        except ValueError as e:
+            # Invalid payload
+            return Response(status=status.HTTP_400_BAD_REQUEST)
+        except stripe.error.SignatureVerificationError as e:
+            # Invalid signature
+            return Response(status=status.HTTP_400_BAD_REQUEST)
+
+        # Handle the event
+        if event['type'] == 'checkout.session.completed':
+            session = event.data.object
+            order_id = session.metadata.get('order_id')
+            order = Order.objects.get(id=order_id)
+            order.status = 'PAID'
+            order.save()
+        # Handle the event
+        elif event['type'] == 'checkout.session.failed':
+            session = event.data.object
+            order_id = session.metadata.get('order_id')
+            order = Order.objects.get(id=order_id)
+            order.status = 'UNPAID'
+            order.save()
+        elif event.type == 'invoice.paid':
+            invoice = event.data.object
+            subscription_id = invoice.subscription
+            # todo check subcription and update to DB
+
+        # Return a response
+        return Response(status=status.HTTP_200_OK)

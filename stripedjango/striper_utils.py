@@ -16,14 +16,31 @@ def stripe_error_handler(func):
         except StripeError as e:
             print('Stripe error:', str(e))
             return Response({'msg': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
     return wrapper
 
 
 @stripe_error_handler
-def create_new_token(**kwargs):
+def check_customer_exist(customer_id):
     """
-    :param kwargs: card info
-        example : card={
+    :param customer_id:
+    :return:
+    """
+    try:
+        token = stripe.Customer.retrieve(customer_id)
+        return True
+    except stripe.error.InvalidRequestError:
+        # customer does not exist
+        return False
+
+
+@stripe_error_handler
+def create_new_customer(email):
+    """
+    Tạo customer và thông tin thanh toán
+    :param email:
+    :param card:
+    example : {
             "number": "4242424242424242",
             "exp_month": 12,
             "exp_year": 22,
@@ -31,25 +48,32 @@ def create_new_token(**kwargs):
         }
     :return:
     """
-    token = stripe.Token.create(
-        card={**kwargs}
+    customer = stripe.Customer.create(
+        email=email
     )
-    return token
+    return customer
 
 
 @stripe_error_handler
-def create_new_customer(email, payment_token):
+def add_payment_method(card, customer_id):
     """
     Tạo customer và thông tin thanh toán
-    :param email:
-    :param payment_token:
+    :param customer_id:
+    :param card:
+    example : {
+            "number": "4242424242424242",
+            "exp_month": 12,
+            "exp_year": 22,
+            "cvc": "123"
+        }
     :return:
     """
-    customer = stripe.Customer.create(
-        email=email,
-        source=payment_token
+    payment_method = stripe.PaymentMethod.create(
+        type="card",
+        card=card,
+        customer=customer_id
     )
-    return customer
+    return payment_method
 
 
 @stripe_error_handler
@@ -82,12 +106,12 @@ def create_new_product(**kwargs):
 
 
 @stripe_error_handler
-def create_new_payment_intent(amount, currency, order_id, customer_id):
+def create_new_payment_intent(amount, payment_method_id, customer_id, currency='usd'):
     """
     customer thanh toán order
     :param amount:
     :param currency:
-    :param order_id:
+    :param payment_method_id:
     :param customer_id:
     :return:
     """
@@ -95,41 +119,40 @@ def create_new_payment_intent(amount, currency, order_id, customer_id):
         amount=amount,
         currency=currency,
         customer=customer_id,
-        metadata={"order_id": order_id},
+        payment_method=payment_method_id,
+        confirm=True
     )
-    # Xác nhận thanh toán
-    intent.confirm()
-    return intent.status
+    return intent.id
 
 
-@stripe_error_handler
-def create_order(order, user_email):
-    """
-    customer thanh toán order
-    :param order:
-    :param customer:
-    :return:
-    """
-    # get product info
-    order_detail = order.order_details.all()
-    line_items = []
-    total_amount = 0
-    for item in order_detail:
-        product = stripe.Product.retrieve(item.product.product_id)
-        prices = stripe.Price.list(product=product)
-        price = next((p for p in prices.data if p.currency == item.product.currency), None)
-        if price:
-            line_items.append({
-                'price': price.id,
-                'quantity': item.quantity,
-            })
-            total_amount += (price.unit_amount*item.quantity)
-    order = stripe.Order.create(
-        currency='usd',
-        email=user_email,
-        items=line_items
-    )
-    return order.id, order.currency, total_amount
+# @stripe_error_handler
+# def create_order(order, user_email):
+#     """
+#     customer thanh toán order
+#     :param order:
+#     :param customer:
+#     :return:
+#     """
+#     # get product info
+#     order_detail = order.order_details.all()
+#     line_items = []
+#     total_amount = 0
+#     for item in order_detail:
+#         product = stripe.Product.retrieve(item.product.product_id)
+#         prices = stripe.Price.list(product=product)
+#         price = next((p for p in prices.data if p.currency == item.product.currency), None)
+#         if price:
+#             line_items.append({
+#                 'price': price.id,
+#                 'quantity': item.quantity,
+#             })
+#             total_amount += (price.unit_amount*item.quantity)
+#     order = stripe.Order.create(
+#         currency='usd',
+#         email=user_email,
+#         items=line_items
+#     )
+#     return order.id, order.currency, total_amount
 
 
 @stripe_error_handler
@@ -147,11 +170,55 @@ def create_subscription(product, customer_id):
         customer=customer_id,
         items=[
             {
-                "plan": plan_id,
-                "quantity": 1,
+                "plan": plan_id
             }
         ]
         # trial_period_days=7
     )
     return subscription
 
+
+@stripe_error_handler
+def create_checkout_session(order, customer_id):
+    """
+    customer thanh toán order
+    :param order:
+    :param customer_id:
+    :return:
+    """
+    # get product info
+    order_detail = order.order_details.all()
+    line_items = []
+    total_amount = 0
+    for item in order_detail:
+        product = stripe.Product.retrieve(item.product.product_id)
+        prices = stripe.Price.list(product=product)
+        price = next((p for p in prices.data if p.currency == item.product.currency), None)
+        if price:
+            line_items.append({
+                'price': price.id,
+                'quantity': item.quantity,
+            })
+            total_amount += (price.unit_amount * item.quantity)
+
+    # get default payment method
+    customer = stripe.Customer.retrieve(customer_id)
+    payment_method = stripe.PaymentMethod.retrieve(customer.invoice_settings.default_payment_method)
+
+    # create payment intent
+    payment_intent = create_new_payment_intent(amount=total_amount, payment_method_id=payment_method.id,
+                                               customer_id=customer_id)
+
+    # create session
+    checkout_session = stripe.checkout.Session.create(
+        payment_intent=payment_intent.id,
+        success_url=settings.CHECKOUT_SUCCESS_URL,
+        cancel_url=settings.CHECKOUT_FAILED_URL,
+        payment_method_types=['card'],
+        mode='payment',
+        line_items=line_items,
+        metadata={
+            'order_id': order.id,
+        }
+    )
+    return checkout_session.id
