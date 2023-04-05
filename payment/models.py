@@ -26,3 +26,10 @@ class OrderDetail(models.Model):
     quantity = models.IntegerField()
 
 
+class UserSubscription(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    subscription_id = models.CharField(max_length=255, blank=True)
+    subscription_status = models.CharField(max_length=255, blank=True)
+
+

@@ -7,7 +7,7 @@ from rest_framework.authentication import TokenAuthentication
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
 from payment.models import Customer
-from .models import User, Product
+from .models import User, Product, ProductInterval, ProductType
 from .serializers import UserSerializer, RegisterSerializer, ProductSerializer
 from stripedjango.striper_utils import create_new_product
 from uuid import uuid4
@@ -58,8 +58,8 @@ class ListProductAPIView(APIView):
             'description': request.data.get('description'),
             'currency': request.data.get('currency'),
             'unit_amount': request.data.get('unit_amount'),
-            'type': request.data.get('type', None),
-            'interval': request.data.get('interval', None),
+            'type': request.data.get('type', ProductType.DIRECT),
+            'interval': request.data.get('interval', ProductInterval.MONTH),
             'user': request.user.id
         }
 
@@ -72,7 +72,8 @@ class ListProductAPIView(APIView):
 
             serializer = ProductSerializer(data=data)
             if serializer.is_valid():
-                serializer.save()
+                validated_data = serializer.validated_data
+                product = Product.objects.create(**validated_data)
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
 
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

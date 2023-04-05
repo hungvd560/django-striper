@@ -3,7 +3,7 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 
 
-class ProductInterval(models.IntegerChoices):
+class ProductInterval(models.TextChoices):
     DAY = 'day'
     WEEK = 'week'
     MONTH = 'month'

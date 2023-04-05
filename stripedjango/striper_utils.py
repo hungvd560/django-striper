@@ -1,4 +1,6 @@
 from django.http import HttpResponseServerError
+from rest_framework import generics, status
+from rest_framework.response import Response
 from stripe.error import StripeError
 import stripe
 from django.conf import settings
@@ -13,7 +15,7 @@ def stripe_error_handler(func):
             return func(*args, **kwargs)
         except StripeError as e:
             print('Stripe error:', str(e))
-            return HttpResponseServerError()
+            return Response({'msg': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     return wrapper
 
 
@@ -61,18 +63,18 @@ def create_new_product(**kwargs):
         description=kwargs.get('description'),
     )
 
-    if kwargs.get('type') and kwargs.get('type') == ProductType.DIRECT:
-
-        price = stripe.Price.create(
-            unit_amount=kwargs.get('unit_amount'),
-            currency=kwargs.get('currency'),
-            product=product["id"],
-        )
-    else:
+    if kwargs.get('type') and kwargs.get('type') == ProductType.RECURRING:
         plan = stripe.Plan.create(
             amount=kwargs.get('unit_amount'),  # Số tiền thanh toán (tính bằng cents)
             currency=kwargs.get('currency'),
             interval=kwargs.get('interval', ProductInterval.MONTH),  # Chu kỳ thanh toán hàng tháng
+            product=product["id"],
+        )
+
+    else:
+        price = stripe.Price.create(
+            unit_amount=kwargs.get('unit_amount'),
+            currency=kwargs.get('currency'),
             product=product["id"],
         )
 
@@ -114,16 +116,42 @@ def create_order(order, user_email):
     total_amount = 0
     for item in order_detail:
         product = stripe.Product.retrieve(item.product.product_id)
-        price = stripe.Price.retrieve(product.price)
-        line_items.append({
-            'price': product.price,
-            'quantity': item.quantity,
-        })
-        total_amount += (price.unit_amount*item.quantity)
+        prices = stripe.Price.list(product=product)
+        price = next((p for p in prices.data if p.currency == item.product.currency), None)
+        if price:
+            line_items.append({
+                'price': price.id,
+                'quantity': item.quantity,
+            })
+            total_amount += (price.unit_amount*item.quantity)
     order = stripe.Order.create(
         currency='usd',
         email=user_email,
-        items=line_items,
+        items=line_items
     )
     return order.id, order.currency, total_amount
+
+
+@stripe_error_handler
+def create_subscription(product, customer_id):
+    """
+    customer thanh toán order
+    :param product:
+    :param customer_id:
+    :return:
+    """
+    # get product info
+    plans = stripe.Plan.list(product=product.product_id)
+    plan_id = plans.data[0].id
+    subscription = stripe.Subscription.create(
+        customer=customer_id,
+        items=[
+            {
+                "plan": plan_id,
+                "quantity": 1,
+            }
+        ]
+        # trial_period_days=7
+    )
+    return subscription
 

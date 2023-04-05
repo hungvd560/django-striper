@@ -46,7 +46,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 class ProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
-        fields = ["id", "name", "description", "currency", "unit_amount", "product_id", "user"]
+        fields = ["id", "name", "description", "currency", "unit_amount", "product_id", "user", "type", "interval"]
 
     # def update(self, instance, validated_data):
     #     # Cập nhật trường title của đối tượng Book

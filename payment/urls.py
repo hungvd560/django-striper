@@ -1,8 +1,10 @@
 from django.urls import path
-from payment.views import CustomerAPIView, OrderAPIView, PaymentAPIView
+from payment.views import CustomerAPIView, OrderAPIView, PaymentAPIView, SubscriptionAPIView
 
 urlpatterns = [
     path('customer', CustomerAPIView.as_view()),
     path('orders/create', OrderAPIView.as_view(), name='order_create'),
-    path('orders/<int:pk>', PaymentAPIView.as_view(), name='payment')
+    path('orders/<int:pk>', PaymentAPIView.as_view(), name='payment'),
+    path('subscription/<int:pk>', SubscriptionAPIView.as_view(), name='Subscription')
+
 ]
