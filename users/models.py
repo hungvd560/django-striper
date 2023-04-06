@@ -31,6 +31,6 @@ class Product(models.Model):
     currency = models.CharField(max_length=30, blank=True)
     unit_amount = models.BigIntegerField(null=False, default=0)
     type = models.IntegerField(choices=ProductType.choices, default=ProductType.DIRECT, null=False)
-    interval = models.CharField(choices=ProductInterval.choices, max_length=50, default=ProductInterval.MONTH, null=False)
+    interval = models.CharField(choices=ProductInterval.choices, max_length=50)
     product_id = models.CharField(max_length=125, blank=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, blank=True, null=True)

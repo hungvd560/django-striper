@@ -71,7 +71,13 @@ def add_payment_method(card, customer_id):
     payment_method = stripe.PaymentMethod.create(
         type="card",
         card=card,
-        customer=customer_id
+    )
+    payment_method.attach(customer=customer_id)
+    stripe.Customer.modify(
+        customer_id,
+        invoice_settings={
+            'default_payment_method': payment_method.id
+        }
     )
     return payment_method
 
@@ -122,7 +128,7 @@ def create_new_payment_intent(amount, payment_method_id, customer_id, currency='
         payment_method=payment_method_id,
         confirm=True
     )
-    return intent.id
+    return intent
 
 
 # @stripe_error_handler
@@ -201,17 +207,21 @@ def create_checkout_session(order, customer_id):
             })
             total_amount += (price.unit_amount * item.quantity)
 
-    # get default payment method
-    customer = stripe.Customer.retrieve(customer_id)
-    payment_method = stripe.PaymentMethod.retrieve(customer.invoice_settings.default_payment_method)
-
-    # create payment intent
-    payment_intent = create_new_payment_intent(amount=total_amount, payment_method_id=payment_method.id,
-                                               customer_id=customer_id)
+    # # get default payment method
+    # customer = stripe.Customer.retrieve(customer_id)
+    # if customer.invoice_settings.default_payment_method is None:
+    #     payment_methods = stripe.PaymentMethod.list(customer=customer_id, type='card')
+    #     payment_method_id = payment_methods.data[0].id if payment_methods else ''
+    # else:
+    #     payment_methods = stripe.PaymentMethod.retrieve(customer.invoice_settings.default_payment_method)
+    #     payment_method_id = payment_methods.id if payment_methods else ''
+    #
+    # # create payment intent
+    # payment_intent = create_new_payment_intent(amount=total_amount, payment_method_id=payment_method_id,
+    #                                            customer_id=customer_id)
 
     # create session
     checkout_session = stripe.checkout.Session.create(
-        payment_intent=payment_intent.id,
         success_url=settings.CHECKOUT_SUCCESS_URL,
         cancel_url=settings.CHECKOUT_FAILED_URL,
         payment_method_types=['card'],
@@ -221,4 +231,4 @@ def create_checkout_session(order, customer_id):
             'order_id': order.id,
         }
     )
-    return checkout_session.id
+    return checkout_session

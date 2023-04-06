@@ -3,6 +3,7 @@ import os
 from uuid import uuid4
 import json
 
+from django.db.models import Q
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 from rest_framework import generics, status
@@ -10,9 +11,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
-from users.models import User
+from users.models import User, ProductType, Product
 from users.serializers import UserSerializer
-from .models import Customer, Order, OrderDetail, Product
+from .models import Customer, Order, OrderDetail
 from .serializers import CustomerSerializer, OrderSerializer, OrderDetailSerializer, SubscriptionSerializer
 
 from stripedjango.striper_utils import create_new_customer, create_checkout_session, \
@@ -55,12 +56,12 @@ class CustomerAPIView(APIView):
         if not flag_exist:
             customer = create_new_customer(user.email)
             customer_id = customer.id
-            user.customer_id = customer_id
+            user.stripe_customer_id = customer_id
             user.save()
 
         # add card to customer
         card = add_payment_method(request.data, customer_id)
-        return Response(user.data, status=status.HTTP_201_CREATED)
+        return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
 
 
 class OrderAPIView(APIView):
@@ -95,10 +96,10 @@ class PaymentAPIView(APIView):
         order = Order.objects.get(pk=pk)
 
         # create order and payment with checkout session
-        session_id = create_checkout_session(order, request.user.stripe_customer_id)
-        order.session_id = session_id
+        checkout_session = create_checkout_session(order, request.user.stripe_customer_id)
+        order.session_id = checkout_session.id
         order.save()
-        return Response(data={'session_id': session_id}, status=status.HTTP_200_OK)
+        return Response(data={'url': checkout_session.url}, status=status.HTTP_200_OK)
 
 
 class SubscriptionAPIView(APIView):
@@ -111,11 +112,14 @@ class SubscriptionAPIView(APIView):
         :return:
         """
 
-        product = Product.objects.get(pk=pk)
-        customer = Customer.object.filter(user__id=request.user.id).first()
-
+        product = Product.objects.filter(Q(id=pk) & Q(type=ProductType.RECURRING)).first()
+        if not product:
+            return Response({"msg": "product not exist."}, status=status.HTTP_400_BAD_REQUEST)
+        customer_id = request.user.stripe_customer_id
+        if not customer_id:
+            return Response({"msg": "Please add payment option."}, status=status.HTTP_400_BAD_REQUEST)
         # create subscription
-        subscription = create_subscription(product, customer.customer_id)
+        subscription = create_subscription(product, customer_id)
 
         data = {
                 'user': request.user.id,
